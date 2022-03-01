@@ -1,0 +1,64 @@
+#!/usr/bin/env bpftrace
+
+#include <linux/skbuff.h>
+#include <linux/ip.h>
+#include <linux/tcp.h>
+#include <linux/netdevice.h>
+#include <net/route.h>
+#include <uapi/linux/in.h>
+#include <linux/socket.h>
+#include <net/sock.h>
+
+kprobe:__netif_receive_skb
+/
+$1 == ((struct iphdr *)(((struct sk_buff *) arg0)->head + ((struct sk_buff *) arg0)->network_header))->saddr ||
+$1 == ((struct iphdr *)(((struct sk_buff *) arg0)->head + ((struct sk_buff *) arg0)->network_header))->daddr ||
+$2 == ((struct iphdr *)(((struct sk_buff *) arg0)->head + ((struct sk_buff *) arg0)->network_header))->saddr ||
+$2 == ((struct iphdr *)(((struct sk_buff *) arg0)->head + ((struct sk_buff *) arg0)->network_header))->saddr
+/
+{
+        $skb = ((struct sk_buff *) arg0);
+        $net = $skb->dev->nd_net.net;
+        $netif = $skb->dev->name;
+        $nsid = $net->ns.inum;
+
+        $iphd = ((struct iphdr *)($skb->head + $skb->network_header));
+        $srcaddr = $iphd->saddr;
+        $dstaddr = $iphd->daddr;
+        $srcip = ntop($iphd->saddr);
+        $dstip = ntop($iphd->daddr);
+        if ($iphd->protocol == IPPROTO_TCP) {
+                $tcphd = ((struct tcphdr *)($skb->head + $skb->transport_header));
+                $sport = $tcphd->source;
+                $sport = ($sport >> 8) | (($sport << 8) & 0x00FF00);
+
+                $dport = $tcphd->dest;
+                $dport = ($dport >> 8) | (($dport << 8) & 0x00FF00);
+
+                // __u32   be32_to_cpu(const __be32);
+                $seq = $tcphd->seq;
+                $seq = ($seq >> 24) | (($seq & 0x00FF0000) >> 8) | (( $seq & 0x00FF00) << 8) | (($seq & 0xFF) << 24);
+
+                $ack = $tcphd->ack_seq;
+                $ack = ($ack >> 24) | (($ack & 0x00FF0000) >> 8) | (( $ack & 0x00FF00) << 8) | (($ack & 0xFF) << 24);
+
+                if($nsid == $3) {
+                    @rcvpkg[$seq] = nsecs;
+                }
+
+                $win = $tcphd->window;
+                $win = ($win >> 8) | (($win << 8) & 0x00FF00);
+
+                $pkgflag = $tcphd->syn > 0 ? "syn" : ($tcphd->fin > 0 ? "fin" : ($tcphd->rst > 0 ? "rst" : ($tcphd->psh > 0 ? "psh" : ($tcphd->ack > 0 ? "ack" : ""))));
+
+                time("%H:%M:%S   ");
+                printf("%-19u %-15s %d,%s,%s,%-20d ", $nsid, $netif, pid, comm, func, cpu);
+                printf("flags:%s, seq:%-u, ack:%u, win:%-25u ", $pkgflag, $seq, $ack, $win);
+                printf("%s:%-15d  %s:%-15d %d ms\n", $srcip, $sport, $dstip, $dport, (nsecs / 1000000) % 1000);
+        }
+}
+
+END
+{
+    clear(@rcvpkg);
+}

@@ -1,0 +1,18 @@
+#!/usr/local/bin/bpftrace
+#include <net/sock.h>
+
+k:hdd_hard_start_xmit
+{
+	@skb[tid] = arg0;
+}
+
+kr:hdd_hard_start_xmit
+/@skb[tid]/
+{
+	$skb = (struct sk_buff *)@skb[tid];
+	$len = $skb->len;
+	$truesize = $skb->truesize;
+
+	printf("bytes %d truesize %d\n", $len, $truesize);
+        delete(@skb[tid]);
+}

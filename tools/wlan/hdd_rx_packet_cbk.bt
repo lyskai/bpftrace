@@ -1,0 +1,18 @@
+#!/usr/local/bin/bpftrace
+#include <net/sock.h>
+
+k:hdd_rx_packet_cbk
+{
+	@skb[tid] = arg1;
+}
+
+kr:hdd_rx_packet_cbk
+/@skb[tid]/
+{
+	$skb = (struct sk_buff *)@skb[tid];
+	$len = $skb->len;
+	$truesize = $skb->truesize;
+
+	printf("bytes %d truesize %d\n", $len, $truesize);
+        delete(@skb[tid]);
+}

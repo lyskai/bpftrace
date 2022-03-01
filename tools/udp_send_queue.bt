@@ -13,6 +13,7 @@
 
 #include <linux/socket.h>
 #include <net/sock.h>
+#include <linux/ip.h>
 
 BEGIN
 {
@@ -35,6 +36,51 @@ BEGIN
   @tcp_states[12] = "NEW_SYN_RECV";
 }
 
+kprobe:sock_wfree
+{
+    //$skb = ((void *) arg0);
+    $skb = ((struct sk_buff *) arg0);
+    $len = kptr(arg0 );
+    $s = (uint32)(*($len + 224));
+    printf("truesize %d %d\n", $skb->truesize, $s);
+    printf("data_len %d\n", $skb->data_len);
+    /*
+    $skb = ((struct sk_buff *) arg0);
+    $sk = ((struct sock *)$skb->sk);
+    $inet_family = $sk->__sk_common.skc_family;
+    if ($inet_family == AF_INET || $inet_family == AF_INET6) {
+	$dport = $sk->__sk_common.skc_dport;
+	$dport = ($dport >> 8) | (($dport << 8) & 0x00FF00);
+	if ($dport == 5002) {
+		//$count = $sk->sk_wmem_alloc.refs.counter;
+		//printf("f %ld %x %-10d\n", nsecs, $skb, $count);
+		$start = @start[$skb];
+		printf("cost %ld us\n", (nsecs - $start) / 1000);
+		delete(@start[$skb]);
+	}
+    }
+    */
+}
+
+/* This will be called by tx path */
+kprobe:skb_set_owner_w
+{
+    $skb = ((struct sk_buff *) arg0);
+    $sk = ((struct sock *) arg1);
+    $inet_family = $sk->__sk_common.skc_family;
+    if ($inet_family == AF_INET || $inet_family == AF_INET6) {
+	$dport = $sk->__sk_common.skc_dport;
+	$dport = ($dport >> 8) | (($dport << 8) & 0x00FF00);
+	if ($dport == 5002) {
+		$count = $sk->sk_wmem_alloc.refs.counter;
+		//$iph = (struct iphdr *)($skb->head + $skb->network_header);
+		//printf("a1 %ld %x %d %-10d id %d\n", nsecs, $skb, $count, $iph->id);
+		@start[$skb] = nsecs;
+
+	}
+    }
+}
+
 kprobe:sock_alloc_send_pskb
 {
   $sk = ((struct sock *) arg0);
@@ -45,7 +91,7 @@ kprobe:sock_alloc_send_pskb
     $dport = ($dport >> 8) | (($dport << 8) & 0x00FF00);
 
     // check port 5001 by default
-    if ($dport == 5001) {
+    if ($dport == 5002) {
            if ($inet_family == AF_INET) {
                 $daddr = ntop($sk->__sk_common.skc_daddr);
                 $saddr = ntop($sk->__sk_common.skc_rcv_saddr);
@@ -63,8 +109,11 @@ kprobe:sock_alloc_send_pskb
             $statestr = @tcp_states[$state];
 
             $count = $sk->sk_wmem_alloc.refs.counter;
+            $sk_sndbuf = $sk->sk_sndbuf;
+	    //time("====%H:%M:%S ");
+	    printf("%ld %-10d %d\n", nsecs / 1000000, $count, $sk_sndbuf);
             // to avoid log flushing, set threshold to 102992
-            if ($count > 102992) {
+            if ($count > 102992 * 100000) {
                     time("====%H:%M:%S ");
                     printf("%-8d %-16s %-10d", pid, comm, $count);
                     printf("%39s:%-6d %39s:%-6d %-10s\n", $saddr, $lport, $daddr, $dport, $statestr);
