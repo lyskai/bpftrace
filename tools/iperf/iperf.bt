@@ -1,0 +1,15 @@
+uprobe:./iperf_default:ReportPacket {
+    //printf("input=%d,", arg0);
+    $header = ((ReportHeader *) arg0);
+    $agentindex = $header->agentindex;
+    printf("agentindex %d", $agentindex);
+    @start = nsecs;
+}
+
+//uretprobe:./a.out:test {
+//    printf("output=%d, cost: %ld ns\n", retval, nsecs-@start);
+//}
+END
+{
+    clear(@start);
+}

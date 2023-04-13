@@ -1,5 +1,11 @@
 # bpftrace
 
+## Kai
+
+cmd: sudo ./build-static/src/bpftrace tools/wlan/udp_send_skb.bt
+
+## end
+
 [![Build Status](https://github.com/iovisor/bpftrace/workflows/CI/badge.svg?branch=master)](https://github.com/iovisor/bpftrace/actions?query=workflow%3ACI+branch%3Amaster)
 [![IRC#bpftrace](https://img.shields.io/badge/IRC-bpftrace-blue.svg)](https://webchat.oftc.net/?channels=bpftrace)
 [![Total alerts](https://img.shields.io/lgtm/alerts/g/iovisor/bpftrace.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/iovisor/bpftrace/alerts/)

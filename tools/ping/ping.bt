@@ -1,0 +1,38 @@
+#include <linux/skbuff.h>
+// if put ping in Desktop, then ok, or in default folder it will failed
+uprobe:/home/kai/Desktop/ping:ping4_send_probe {
+    $rts = ((struct ping_rts *) arg0);
+    printf("===>ping size %d\n", $rts->datalen);
+    @start = nsecs;
+}
+uprobe:/home/kai/Desktop/ping:ping4_parse_reply
+/@start/
+{
+    @usecs = nsecs - @start;
+    printf("<=== total delay %d\n", @usecs / 1000);
+}
+kprobe:e1000_xmit_frame
+{
+    @skb = ((struct sk_buff *) arg0);
+    // must need {  } in if
+    if (@skb->len > 1300) {
+	printf("   ==>eth send size %d\n", @skb->len);
+    }
+    @eth_start = nsecs;
+}
+
+kprobe:e1000_receive_skb
+/@eth_start/
+{
+    @skb = ((struct sk_buff *) arg2);
+    // must need {  } in if
+    if (@skb->len > 1300) {
+	@eth_usecs = nsecs - @eth_start;
+	printf("   <== eth rev size %d, eth_dealy %d\n", @skb->len, @eth_usecs / 1000);
+    }
+}
+END
+{
+    clear(@start);
+    clear(@usecs);
+}

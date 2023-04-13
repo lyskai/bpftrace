@@ -1,0 +1,74 @@
+#!/usr/bin/env bpftrace
+/*
+ * udp_send_queue.bt   Trace UDP kernel socket send queue.
+ *              For Linux, uses bpftrace and eBPF.
+ *
+ * USAGE: udp_send_queue.bt
+ *
+ * This is a bpftrace version of the bcc tool of the same name.
+ * It is limited to ipv4 addresses, and cannot show tcp flags.
+ *
+ * 19-Dec-2021 Kai Liu -- created this.
+ */
+
+#include <linux/socket.h>
+#include <net/sock.h>
+#include <linux/ip.h>
+#include <net/inet_sock.h>
+
+BEGIN
+{
+  printf("Tracing UDP send queue. Hit Ctrl-C to end.\n");
+  printf("===============checking port 5001 by default ==============\n");
+  printf("%-8s %-8s %-16s %-21s %-21s %-8s\n", "TIME", "PID", "COMM", "SADDR:SPORT", "DADDR:DPORT", "STATE");
+
+  // See https://github.com/torvalds/linux/blob/master/include/net/tcp_states.h
+  @tcp_states[1] = "ESTABLISHED";
+  @tcp_states[2] = "SYN_SENT";
+  @tcp_states[3] = "SYN_RECV";
+  @tcp_states[4] = "FIN_WAIT1";
+  @tcp_states[5] = "FIN_WAIT2";
+  @tcp_states[6] = "TIME_WAIT";
+  @tcp_states[7] = "CLOSE";
+  @tcp_states[8] = "CLOSE_WAIT";
+  @tcp_states[9] = "LAST_ACK";
+  @tcp_states[10] = "LISTEN";
+  @tcp_states[11] = "CLOSING";
+  @tcp_states[12] = "NEW_SYN_RECV";
+}
+/*
+kprobe:inet_sendmsg
+{
+    $len = (arg2);
+    printf("inet_sendmsg len %d\n", $len);
+}
+kprobe:udp_sendmsg
+{
+    $len = (arg2);
+    printf("udp_sendmsg len %d\n", $len);
+}
+*/
+kprobe:udp_send_skb.isra.0
+{
+    $skb = ((struct sk_buff *) arg0);
+    $sk = ((struct sock *)$skb->sk);
+    $inet_family = $sk->__sk_common.skc_family;
+    if ($inet_family == AF_INET || $inet_family == AF_INET6) {
+	$dport = $sk->__sk_common.skc_dport;
+	$dport = ($dport >> 8) | (($dport << 8) & 0x00FF00);
+	if ($dport == 5001) {
+		//$count = $sk->sk_wmem_alloc.refs.counter;
+		//$iph = (struct iphdr *)($skb->head + $skb->network_header);
+		//printf("a1 %ld %x %d %-10d id %d\n", nsecs, $skb, $count, $iph->id);
+		//@start[$skb] = nsecs;
+		$cork = ((struct inet_cork *) arg2);
+		$gso_size = $cork->gso_size;
+		printf("%d\n", $gso_size);
+	}
+    }
+}
+
+END
+{
+  clear(@tcp_states);
+}
