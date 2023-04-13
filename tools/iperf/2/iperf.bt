@@ -1,0 +1,41 @@
+//uprobe:/home/kaliu/bpftrace_self/iperf/iperf-2.0.5/src/iperf:ReportPacket {
+uprobe:/home/kaliu/bpftrace_self/iperf/iperf-2.0.5/src/iperf:ReportPacket {
+//    printf("%lu\n", nsecs);
+    $header = ((struct ReportHeader *) arg0);
+    $agentindex = $header->agentindex;
+    $reporterindex= $header->reporterindex;
+    if($agentindex == ($reporterindex - 1)) {
+	//printf("agentindex %d $reporterindex %d\n", $agentindex, $reporterindex);
+	printf("queue full | %lu | agentindex %d $reporterindex %d\n", nsecs, $agentindex, $reporterindex);
+    }
+    if ($agentindex > $reporterindex ) {
+	//printf("entry#1 size %d\n", $agentindex - $reporterindex);
+	$size = $agentindex - $reporterindex
+    }else {
+	//printf("entry#2 size %d\n", 1000 + $agentindex - $reporterindex);
+	$size = 2000 + $agentindex - $reporterindex
+    }
+    //if ($size > 1000){
+    //printf("size %d\n", $size);
+    //}
+    @start = nsecs;
+}
+//uprobe:/home/kaliu/bpftrace_self/iperf/iperf-2.0.5/src/iperf:delay_loop {
+//    printf("delay=%d, current time %lu delta %lu\n",arg0, nsecs, nsecs - @last);
+//    @last = nsecs
+//}
+//uprobe:/home/kaliu/bpftrace_self/iperf/iperf-2.0.5/src/iperf:reporter_process_report {
+//    printf("reporter_process_report current time %lu delta %lu\n", nsecs, nsecs - @last);
+//    @last = nsecs
+//}
+uretprobe:/home/kaliu/bpftrace_self/iperf/iperf-2.0.5/src/iperf:reporter_process_report {
+    printf("reporter_process_report exit %lu delta %lu retval %d\n", nsecs, nsecs - @last, retval);
+    @last = nsecs
+}
+//uretprobe:./a.out:test {
+//    printf("output=%d, cost: %ld ns\n", retval, nsecs-@start);
+//}
+END
+{
+    clear(@start);
+}
