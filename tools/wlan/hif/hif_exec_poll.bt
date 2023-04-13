@@ -1,0 +1,63 @@
+#!/usr/bin/env bpftrace
+/*
+ * udp_send_queue.bt   Trace UDP kernel socket send queue.
+ *              For Linux, uses bpftrace and eBPF.
+ *
+ * USAGE: udp_send_queue.bt
+ *
+ * This is a bpftrace version of the bcc tool of the same name.
+ * It is limited to ipv4 addresses, and cannot show tcp flags.
+ *
+ * 19-Dec-2021 Kai Liu -- created this.
+ */
+
+
+BEGIN
+{
+  printf("Tracing UDP send queue. Hit Ctrl-C to end.\n");
+  printf("===============checking port 5001 by default ==============\n");
+  printf("%-8s %-8s %-16s %-21s %-21s %-8s\n", "TIME", "PID", "COMM", "SADDR:SPORT", "DADDR:DPORT", "STATE");
+
+  // See https://github.com/torvalds/linux/blob/master/include/net/tcp_states.h
+  @tcp_states[1] = "ESTABLISHED";
+  @tcp_states[2] = "SYN_SENT";
+  @tcp_states[3] = "SYN_RECV";
+  @tcp_states[4] = "FIN_WAIT1";
+  @tcp_states[5] = "FIN_WAIT2";
+  @tcp_states[6] = "TIME_WAIT";
+  @tcp_states[7] = "CLOSE";
+  @tcp_states[8] = "CLOSE_WAIT";
+  @tcp_states[9] = "LAST_ACK";
+  @tcp_states[10] = "LISTEN";
+  @tcp_states[11] = "CLOSING";
+  @tcp_states[12] = "NEW_SYN_RECV";
+}
+
+kprobe:hif_exec_poll
+{
+	$budget = arg1;
+	@start[tid] = nsecs;
+	if ($budget != 64) {
+		printf("budget %d\n", $budget);
+	}
+}
+
+kretprobe:hif_exec_poll
+/@start[tid]/
+{
+	if ((nsecs - @start[tid]) / 1000 > 1) {
+	    //printf("cost %ld us\n", (nsecs - @start[tid]) / 1000);
+	    $cost = (nsecs - @start[tid])/1000;
+	    @hcost_us = lhist($cost, 0, 10000, 50);
+	}
+	delete(@start[tid]);
+	//if (retval != 0) {
+		//printf("work_done %d\n", retval);
+	    	@hw = lhist(retval, 0, 100, 5);
+	//}
+}
+
+END
+{
+  clear(@tcp_states);
+}
