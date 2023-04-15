@@ -1,0 +1,18 @@
+#!/usr/bin/env bpftrace
+
+#include <linux/skbuff.h>
+#include <linux/ip.h>
+#include <linux/tcp.h>
+#include <linux/netdevice.h>
+#include <net/route.h>
+#include <uapi/linux/in.h>
+#include <linux/socket.h>
+#include <net/sock.h>
+
+kprobe:__netdev_alloc_skb
+{
+}
+
+END
+{
+}

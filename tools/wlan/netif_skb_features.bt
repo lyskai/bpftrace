@@ -1,0 +1,48 @@
+#!/usr/local/bin/bpftrace
+#include <net/sock.h>
+
+/*
+k:netif_skb_features
+{
+	$skb = (struct sk_buff *)(arg0);
+	$len = $skb->len;
+	$truesize = $skb->truesize;
+	$shinfo = (struct skb_shared_info *)($skb->head + $skb->end);
+	//printf("bytes %d truesize %d frag_list %x\n", $len, $truesize, $shinfo->frag_list);
+}
+*/
+
+k:skb_segment
+{
+	$skb = (struct sk_buff *)(arg0);
+	$len = $skb->len;
+	$data_len = $skb->data_len;
+	$truesize = $skb->truesize;
+	$shinfo = (struct skb_shared_info *)($skb->head + $skb->end);
+	$doffset = $skb->data - ($skb->head + $skb->mac_header);
+	if ($shinfo->gso_segs == 1) {
+		printf("doffset %d len %d data_len %d gso_size %d\n",
+			$doffset, $len, $data_len, $shinfo->gso_size);
+		//printf("skb %lx doffset %d bytes %d truesize %d frag_list %lx gso_size %d\n",
+			//skb, $doffset, $len, $truesize, $shinfo->frag_list, $shinfo->gso_size);
+
+	}
+}
+
+/*
+kr:skb_segment
+{
+	printf("skb segs %lx\n", retval);
+}
+
+k:__skb_gso_segment
+{
+	$features = (arg1);
+	printf("$features %lx\n", $features);
+}
+
+kr:netif_skb_features
+{
+	printf("ret %lx %lu\n", retval, retval);
+}
+*/

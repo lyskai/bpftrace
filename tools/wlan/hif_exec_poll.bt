@@ -36,24 +36,21 @@ BEGIN
   @tcp_states[12] = "NEW_SYN_RECV";
 }
 
-kprobe:udp_send_skb
+kprobe:hif_exec_poll
 {
-    $skb = ((struct sk_buff *) arg0);
-    $sk = ((struct sock *)$skb->sk);
-    $inet_family = $sk->__sk_common.skc_family;
-    if ($inet_family == AF_INET || $inet_family == AF_INET6) {
-	$dport = $sk->__sk_common.skc_dport;
-	$dport = ($dport >> 8) | (($dport << 8) & 0x00FF00);
-	if ($dport == 5001) {
-		//$count = $sk->sk_wmem_alloc.refs.counter;
-		//$iph = (struct iphdr *)($skb->head + $skb->network_header);
-		//printf("a1 %ld %x %d %-10d id %d\n", nsecs, $skb, $count, $iph->id);
-		//@start[$skb] = nsecs;
-		$cork = ((struct cork *) arg2);
-		$gso_size = $cork->gso_size;
-		printf("%-8d %-16s %-10d", $gso_size);
+	$budget = arg1;
+	@start[tid] = nsecs;
+	printf("budget %d\n", $budget);
+}
+
+kretprobe:hif_exec_poll
+/@start[tid]/
+{
+	if ((nsecs - @start[tid]) / 1 > 1) {
+	    printf("cost %ld us\n", (nsecs - @start[tid]) / 1000);
 	}
-    }
+	delete(@start[tid]);
+	printf("work_done %d\n", retval);
 }
 
 END

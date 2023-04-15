@@ -1,0 +1,44 @@
+#!/usr/local/bin/bpftrace
+#include <net/sock.h>
+#include <linux/device.h>
+
+/*
+k:dma_alloc_attrs
+{
+	$device = (struct device *)arg0;
+	$type = (struct device_type *)($device->type);
+	$size = arg1;
+	//$kobj = (struct kobject *)(&($device->kobj));
+	//$name = (char *)($type->name);
+	//printf("name %s size %d, %s\n", str($type->name), $size, kstack());
+	//printf("name %s\n", str($kobj->name));
+	@s[kstack] = hist($size)
+}
+*/
+BEGIN
+{
+	@total = 0;
+}
+
+
+k:dma_alloc_attrs
+{
+	$device = (struct device *)arg0;
+	$type = (struct device_type *)($device->type);
+	$size = arg1;
+	@total = @total + $size;
+	printf("name %s total %d size %d, %s\n", str($type->name), @total, $size, kstack());
+}
+
+k:dma_free_attrs
+{
+	$size = arg1;
+	@total = @total - $size;
+	printf("total %d free size %d, %s\n", @total, $size, kstack());
+
+}
+
+END
+{
+	clear(@total);
+}

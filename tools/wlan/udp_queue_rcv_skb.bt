@@ -36,10 +36,10 @@ BEGIN
   @tcp_states[12] = "NEW_SYN_RECV";
 }
 
-kprobe:udp_send_skb
+kprobe:udp_queue_rcv_skb
 {
-    $skb = ((struct sk_buff *) arg0);
-    $sk = ((struct sock *)$skb->sk);
+    $sk = ((struct sock *) arg0);
+    $skb = ((struct sk_buff *) arg1);
     $inet_family = $sk->__sk_common.skc_family;
     if ($inet_family == AF_INET || $inet_family == AF_INET6) {
 	$dport = $sk->__sk_common.skc_dport;
@@ -49,9 +49,10 @@ kprobe:udp_send_skb
 		//$iph = (struct iphdr *)($skb->head + $skb->network_header);
 		//printf("a1 %ld %x %d %-10d id %d\n", nsecs, $skb, $count, $iph->id);
 		//@start[$skb] = nsecs;
-		$cork = ((struct cork *) arg2);
-		$gso_size = $cork->gso_size;
-		printf("%-8d %-16s %-10d", $gso_size);
+		//$cork = ((struct cork *) arg2);
+		//$gso_size = $cork->gso_size;
+		//printf("%-8d %-16s %-10d", $gso_size);
+		printf("len %d data %d mac %d hdr %d", $skb->len, $skb->data_len, $skb->mac_len, $skb->hdr_len);
 	}
     }
 }

@@ -1,0 +1,19 @@
+#!/usr/local/bin/bpftrace
+#include <net/sock.h>
+
+k:dp_fisa_rx
+{
+	@skb[tid] = arg2;
+}
+
+kr:dp_fisa_rx
+/@skb[tid]/
+{
+	$skb = (struct sk_buff *)@skb[tid];
+	$len = $skb->len;
+	$truesize = $skb->truesize;
+	$shinfo = (struct skb_shared_info *)($skb->head + $skb->end);
+
+	printf("bytes %d truesize %d frag_list %x\n", $len, $truesize, $shinfo->frag_list);
+        delete(@skb[tid]);
+}
